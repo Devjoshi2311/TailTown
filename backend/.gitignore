@@ -40,9 +40,10 @@ local.properties
 # Compiled class files
 *.class
 
-# JAR files (excluding intentional build output)
+# JAR files (excluding intentional build output and the Gradle wrapper jar)
 *.jar
 !build/libs/*.jar
+!gradle/wrapper/gradle-wrapper.jar
 
 # Log files
 *.log
