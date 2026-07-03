@@ -44,7 +44,15 @@ class ShopProductsViewModel @Inject constructor(private val api: ApiService) : V
     private val _products = MutableStateFlow<List<ShopProduct>>(emptyList())
     val products: StateFlow<List<ShopProduct>> = _products.asStateFlow()
 
-    init { loadProducts() }
+    private var loaded = false
+
+    // Was eagerly fetched at NavGraph root regardless of whether Shop was ever opened —
+    // now triggered lazily from MallHomeScreen/CategoryScreen (see NavGraph.kt).
+    fun ensureLoaded() {
+        if (loaded) return
+        loaded = true
+        loadProducts()
+    }
 
     private fun loadProducts() {
         viewModelScope.launch {

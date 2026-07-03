@@ -24,4 +24,17 @@ interface VetRepository : JpaRepository<VetEntity, UUID> {
         status: String,
         pageable: Pageable
     ): Page<VetEntity>
+
+    fun findAllByStatusAndSpecialtyNotIgnoreCaseAndDeletedAtIsNull(
+        status: String,
+        specialty: String,
+        pageable: Pageable
+    ): Page<VetEntity>
+
+    fun findByCityIgnoreCaseAndStatusAndSpecialtyNotIgnoreCaseAndDeletedAtIsNull(
+        city: String,
+        status: String,
+        specialty: String,
+        pageable: Pageable
+    ): Page<VetEntity>
 }

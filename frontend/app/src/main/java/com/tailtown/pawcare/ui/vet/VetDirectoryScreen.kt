@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,7 +43,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import coil.compose.AsyncImage
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.tailtown.pawcare.common.UiState
 import com.tailtown.pawcare.ui.theme.Bone
 import com.tailtown.pawcare.ui.theme.Coral
 import com.tailtown.pawcare.ui.theme.Hairline
@@ -56,17 +59,19 @@ private val vetFilters = listOf("All", "Home visit", "Surgery", "Dental", "Small
 
 @Composable
 fun VetDirectoryScreen(
-    vets: List<Vet>,
+    vets: UiState<List<Vet>>,
     city: String = "",
     onVetClick: (String) -> Unit,
+    onRetry: () -> Unit = {},
 ) {
     var selectedFilter by remember { mutableStateOf("All") }
 
-    val filteredVets = remember(vets, selectedFilter) {
+    val vetsList = (vets as? UiState.Success)?.data ?: emptyList()
+    val filteredVets = remember(vetsList, selectedFilter) {
         when (selectedFilter) {
-            "Home visit" -> vets.filter { it.homeVisitAvailable }
-            "All"        -> vets
-            else         -> vets.filter { it.specialty.contains(selectedFilter, ignoreCase = true) }
+            "Home visit" -> vetsList.filter { it.homeVisitAvailable }
+            "All"        -> vetsList
+            else         -> vetsList.filter { it.specialty.contains(selectedFilter, ignoreCase = true) }
         }
     }
 
@@ -139,21 +144,49 @@ fun VetDirectoryScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        Text(
-            text = "${filteredVets.size} vets available",
-            style = MaterialTheme.typography.labelSmall,
-            color = Ink500,
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
+        when (vets) {
+            is UiState.Loading -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Coral, strokeWidth = 2.dp)
+                }
+            }
+            is UiState.Error -> {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(text = vets.message, style = MaterialTheme.typography.bodyMedium, color = Ink500)
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "Retry",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            textDecoration = TextDecoration.Underline,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        color = Ink900,
+                        modifier = Modifier.clickable { onRetry() },
+                    )
+                }
+            }
+            is UiState.Success -> {
+                Text(
+                    text = "${filteredVets.size} vets available",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Ink500,
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
 
-        Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(12.dp))
 
-        LazyColumn(
-            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            items(filteredVets) { vet ->
-                VetCard(vet = vet, onClick = { onVetClick(vet.id) })
+                LazyColumn(
+                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    items(filteredVets) { vet ->
+                        VetCard(vet = vet, onClick = { onVetClick(vet.id) })
+                    }
+                }
             }
         }
     }
@@ -290,5 +323,5 @@ private fun VetCard(vet: Vet, onClick: () -> Unit) {
 @Preview(showBackground = true)
 @Composable
 private fun VetDirectoryPreview() {
-    PawcareTheme { VetDirectoryScreen(vets = sampleVets, onVetClick = {}) }
+    PawcareTheme { VetDirectoryScreen(vets = UiState.Success(sampleVets), onVetClick = {}) }
 }

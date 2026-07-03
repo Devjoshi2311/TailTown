@@ -5,6 +5,8 @@ import com.tailtown.pawcare.data.remote.dto.VetResponseDto
 import com.tailtown.pawcare.data.repository.VetRepository
 import com.tailtown.pawcare.ui.theme.CoralSoft
 import com.tailtown.pawcare.ui.vet.Vet
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,14 +23,27 @@ private val savedVets = mutableSetOf<String>()
 @Singleton
 class RemoteVetRepository @Inject constructor(private val api: ApiService) : VetRepository {
 
-    override suspend fun getVets(): List<Vet> =
-        api.getVets().data?.mapIndexed { i, dto -> dto.toVet(i) } ?: emptyList()
+    // HomeViewModel and VetDirectoryViewModel both fetch the same vet list independently on
+    // cold start — a short-lived cache lets the second caller reuse the first's result instead
+    // of firing a duplicate network round trip (each of which costs real time on a distant backend).
+    private val cacheMutex = Mutex()
+    private var cachedVets: List<Vet>? = null
+    private var cachedAtMillis: Long = 0
+    private val cacheTtlMillis = 30_000L
 
-    override suspend fun getVet(id: String): Vet? {
-        val all = api.getVets().data ?: return null
-        val idx = all.indexOfFirst { it.id == id }
-        return if (idx >= 0) all[idx].toVet(idx) else null
+    override suspend fun getVets(): List<Vet> = cacheMutex.withLock {
+        val cached = cachedVets
+        val now = System.currentTimeMillis()
+        if (cached != null && now - cachedAtMillis < cacheTtlMillis) {
+            return@withLock cached
+        }
+        val fresh = api.getVets().data?.mapIndexed { i, dto -> dto.toVet(i) } ?: emptyList()
+        cachedVets = fresh
+        cachedAtMillis = now
+        fresh
     }
+
+    override suspend fun getVet(id: String): Vet? = getVets().find { it.id == id }
 
     override suspend fun isSaved(vetId: String) = vetId in savedVets
 

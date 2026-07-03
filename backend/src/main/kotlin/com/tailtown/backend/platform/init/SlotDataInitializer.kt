@@ -30,35 +30,45 @@ class SlotDataInitializer(
         LocalTime.of(14, 0),
     )
 
+    // Runs on every boot, blocking readiness — was doing one exists-check + one insert per
+    // slot (up to 2 * vets * 14 days * 3 times round trips, sequentially). Replaced with a
+    // single bulk read of what already exists in the window, then one batched insert for the
+    // gaps, so a cold Render start isn't held up by hundreds of sequential DB round trips.
     @Transactional
     override fun run(args: ApplicationArguments) {
         val vets = vetRepository.findAllByStatusAndDeletedAtIsNull("ACTIVE", PageRequest.of(0, 100)).content
         if (vets.isEmpty()) return
 
         val today = LocalDate.now(ist)
-        var created = 0
+        val rangeStart = ZonedDateTime.of(today.plusDays(1), LocalTime.MIN, ist).toInstant()
+        val rangeEnd = ZonedDateTime.of(today.plusDays(14), LocalTime.MAX, ist).toInstant()
 
+        val existing = slotRepository
+            .findAllByVetIdInAndStartsAtBetweenAndDeletedAtIsNull(vets.map { it.id }, rangeStart, rangeEnd)
+            .mapTo(HashSet()) { it.vetId to it.startsAt }
+
+        val toCreate = mutableListOf<BookingSlotEntity>()
         for (vet in vets) {
             for (dayOffset in 1L..14L) {
                 val date = today.plusDays(dayOffset)
                 for (time in slotTimes) {
                     val startsAt = ZonedDateTime.of(date, time, ist).toInstant()
-                    if (!slotRepository.existsByVetIdAndStartsAtAndDeletedAtIsNull(vet.id, startsAt)) {
-                        slotRepository.save(
-                            BookingSlotEntity(
-                                vetId = vet.id,
-                                serviceType = "CONSULTATION",
-                                startsAt = startsAt,
-                                endsAt = ZonedDateTime.of(date, time.plusMinutes(30), ist).toInstant(),
-                                price = BigDecimal("600.00"),
-                            )
+                    if (vet.id to startsAt !in existing) {
+                        toCreate += BookingSlotEntity(
+                            vetId = vet.id,
+                            serviceType = "CONSULTATION",
+                            startsAt = startsAt,
+                            endsAt = ZonedDateTime.of(date, time.plusMinutes(30), ist).toInstant(),
+                            price = BigDecimal("600.00"),
                         )
-                        created++
                     }
                 }
             }
         }
 
-        if (created > 0) log.info("SlotDataInitializer: created $created new slots for ${vets.size} vets")
+        if (toCreate.isNotEmpty()) {
+            slotRepository.saveAll(toCreate)
+            log.info("SlotDataInitializer: created ${toCreate.size} new slots for ${vets.size} vets")
+        }
     }
 }

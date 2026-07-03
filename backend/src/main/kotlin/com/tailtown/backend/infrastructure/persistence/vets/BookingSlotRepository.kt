@@ -20,6 +20,12 @@ interface BookingSlotRepository : JpaRepository<BookingSlotEntity, UUID> {
 
     fun existsByVetIdAndStartsAtAndDeletedAtIsNull(vetId: UUID, startsAt: Instant): Boolean
 
+    fun findAllByVetIdInAndStartsAtBetweenAndDeletedAtIsNull(
+        vetIds: List<UUID>,
+        from: Instant,
+        to: Instant
+    ): List<BookingSlotEntity>
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM BookingSlotEntity s WHERE s.id = :id AND s.deletedAt IS NULL")
     fun findByIdForUpdate(id: UUID): BookingSlotEntity?

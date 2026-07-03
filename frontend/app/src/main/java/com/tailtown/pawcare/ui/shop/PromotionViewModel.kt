@@ -25,7 +25,15 @@ class PromotionViewModel @Inject constructor(private val api: ApiService) : View
     private val _promotion = MutableStateFlow<Promotion?>(null)
     val promotion: StateFlow<Promotion?> = _promotion.asStateFlow()
 
-    init { loadPromotions() }
+    private var loaded = false
+
+    // Was eagerly fetched at NavGraph root regardless of whether Shop was ever opened —
+    // now triggered lazily from MallHomeScreen itself (see NavGraph.kt).
+    fun ensureLoaded() {
+        if (loaded) return
+        loaded = true
+        loadPromotions()
+    }
 
     private fun loadPromotions() {
         viewModelScope.launch {

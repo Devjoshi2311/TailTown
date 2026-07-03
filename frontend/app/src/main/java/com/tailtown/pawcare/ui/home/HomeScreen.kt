@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.tailtown.pawcare.common.UiState
 import com.tailtown.pawcare.ui.shop.ShopProduct
 import com.tailtown.pawcare.ui.theme.Bone
 import com.tailtown.pawcare.ui.theme.Coral
@@ -84,7 +85,7 @@ private val homeNavItems = listOf(
 
 @Composable
 fun HomeScreen(
-    vets: List<Vet>,
+    vets: UiState<List<Vet>>,
     petName: String = "your pet",
     foodProducts: List<ShopProduct> = emptyList(),
     toyProducts: List<ShopProduct> = emptyList(),
@@ -97,6 +98,7 @@ fun HomeScreen(
     onVisits: () -> Unit,
     onShop: () -> Unit = {},
     onPetProfile: () -> Unit,
+    onRetryVets: () -> Unit = {},
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var selectedNav by remember { mutableIntStateOf(0) }
@@ -224,7 +226,7 @@ fun HomeScreen(
             }
 
             when (selectedTab) {
-                0 -> VetsContent(vets = vets, onVetClick = onVetClick, onShowAllVets = onShowAllVets)
+                0 -> VetsContent(vets = vets, onVetClick = onVetClick, onShowAllVets = onShowAllVets, onRetry = onRetryVets)
                 1 -> ProductContent(title = "Food", products = foodProducts, onProductClick = onProductClick, onShowAll = onShop)
                 2 -> ProductContent(title = "Toys", products = toyProducts, onProductClick = onProductClick, onShowAll = onShop)
                 3 -> GroomContent(groomers = groomers)
@@ -234,15 +236,58 @@ fun HomeScreen(
 }
 
 @Composable
-private fun VetsContent(vets: List<Vet>, onVetClick: (String) -> Unit, onShowAllVets: () -> Unit) {
-    LazyColumn(
-        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item { SectionHeader(title = "Top vets near you", onShowAll = onShowAllVets) }
-        items(vets, key = { it.id }) { vet ->
-            HomeVetCard(vet = vet, onClick = { onVetClick(vet.id) })
+private fun VetsContent(
+    vets: UiState<List<Vet>>,
+    onVetClick: (String) -> Unit,
+    onShowAllVets: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    when (vets) {
+        is UiState.Loading -> EmptyTabContent()
+        is UiState.Error -> ErrorTabContent(message = vets.message, onRetry = onRetry)
+        is UiState.Success -> {
+            if (vets.data.isEmpty()) {
+                EmptyMessage(message = "No vets available right now.")
+                return
+            }
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                item { SectionHeader(title = "Top vets near you", onShowAll = onShowAllVets) }
+                items(vets.data, key = { it.id }) { vet ->
+                    HomeVetCard(vet = vet, onClick = { onVetClick(vet.id) })
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun ErrorTabContent(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(text = message, style = MaterialTheme.typography.bodyMedium, color = Ink500)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = "Retry",
+            style = MaterialTheme.typography.bodyMedium.copy(
+                textDecoration = TextDecoration.Underline,
+                fontWeight = FontWeight.Medium,
+            ),
+            color = Ink900,
+            modifier = Modifier.clickable { onRetry() },
+        )
+    }
+}
+
+@Composable
+private fun EmptyMessage(message: String) {
+    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        Text(text = message, style = MaterialTheme.typography.bodyMedium, color = Ink500)
     }
 }
 
@@ -465,6 +510,6 @@ private fun StarRating(rating: Float, reviews: Int? = null) {
 @Composable
 private fun HomeScreenPreview() {
     PawcareTheme {
-        HomeScreen(vets = emptyList(), onVetClick = {}, onShowAllVets = {}, onVisits = {}, onPetProfile = {})
+        HomeScreen(vets = UiState.Success(emptyList()), onVetClick = {}, onShowAllVets = {}, onVisits = {}, onPetProfile = {})
     }
 }

@@ -19,12 +19,14 @@ class VetService(
     private val bookingSlotRepository: BookingSlotRepository
 ) {
 
+    // "GROOMING" listings are salons, not veterinarians — kept out of the general/city listing
+    // and only surfaced when a caller explicitly asks for that specialty (the Groom tab).
     fun listVets(city: String?, specialty: String?, page: Int, size: Int): Page<VetEntity> {
         val pageable = PageRequest.of(page, size)
         return when {
             specialty != null -> vetRepository.findAllBySpecialtyIgnoreCaseAndStatusAndDeletedAtIsNull(specialty, "ACTIVE", pageable)
-            city != null      -> vetRepository.findByCityIgnoreCaseAndStatusAndDeletedAtIsNull(city, "ACTIVE", pageable)
-            else              -> vetRepository.findAllByStatusAndDeletedAtIsNull("ACTIVE", pageable)
+            city != null      -> vetRepository.findByCityIgnoreCaseAndStatusAndSpecialtyNotIgnoreCaseAndDeletedAtIsNull(city, "ACTIVE", "GROOMING", pageable)
+            else              -> vetRepository.findAllByStatusAndSpecialtyNotIgnoreCaseAndDeletedAtIsNull("ACTIVE", "GROOMING", pageable)
         }
     }
 

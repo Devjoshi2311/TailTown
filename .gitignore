@@ -22,3 +22,7 @@ node_modules/
 
 # Backend sensitive dev config (contains real JWT keys / credentials)
 **/application-dev.yml
+
+# Local scratch file with live deploy secrets — never commit
+RENDER_DEPLOY_SECRETS.md
+RENDER_SG_BACKEND_ENV.md

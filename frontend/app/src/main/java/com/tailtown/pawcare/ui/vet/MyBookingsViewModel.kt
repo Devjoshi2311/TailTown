@@ -19,7 +19,8 @@ class MyBookingsViewModel @Inject constructor(
     private val _bookings = MutableStateFlow<List<UpcomingBooking>>(emptyList())
     val bookings: StateFlow<List<UpcomingBooking>> = _bookings.asStateFlow()
 
-    init { refresh() }
+    // No eager init — MyBookingsScreen already triggers refresh() itself via LaunchedEffect,
+    // so fetching here too was a redundant duplicate call on every cold start.
 
     fun refresh() {
         viewModelScope.launch {

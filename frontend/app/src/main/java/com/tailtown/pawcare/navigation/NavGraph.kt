@@ -241,13 +241,14 @@ fun PawcareNavGraph(
             val toyProducts by homeViewModel.toyProducts.collectAsStateWithLifecycle()
             val groomers by homeViewModel.groomers.collectAsStateWithLifecycle()
             HomeScreen(
-                vets = (vets as? com.tailtown.pawcare.common.UiState.Success)?.data ?: emptyList(),
+                vets = vets,
                 petName = petName,
                 foodProducts = foodProducts,
                 toyProducts = toyProducts,
                 groomers = groomers,
                 onVetClick = { vetId -> navController.navigate(Screen.VetDetail.createRoute(vetId)) },
                 onShowAllVets = { navController.navigate(Screen.VetDirectory.route) },
+                onRetryVets = homeViewModel::loadVets,
                 onProductClick = { productId -> navController.navigate(Screen.ProductDetail.createRoute(productId)) },
                 onTabSelected = homeViewModel::onTabSelected,
                 onInbox = { navController.navigate(Screen.Inbox.route) },
@@ -334,15 +335,16 @@ fun PawcareNavGraph(
         // ── Vet Appointments ───────────────────────────────────────────────
 
         composable(Screen.VetDirectory.route) {
-            val vets by vetViewModel.vets.collectAsStateWithLifecycle()
+            val vetsState by vetViewModel.vets.collectAsStateWithLifecycle()
             val addresses by accountViewModel.addresses.collectAsStateWithLifecycle()
             val city = addresses.firstOrNull { it.isDefault }?.city
                 ?: addresses.firstOrNull()?.city
                 ?: ""
             VetDirectoryScreen(
-                vets = vets,
+                vets = vetsState,
                 city = city,
                 onVetClick = { vetId -> navController.navigate(Screen.VetDetail.createRoute(vetId)) },
+                onRetry = vetViewModel::loadVets,
             )
         }
 
@@ -351,7 +353,8 @@ fun PawcareNavGraph(
             arguments = listOf(navArgument("vetId") { type = NavType.StringType }),
         ) { back ->
             val vetId = back.arguments?.getString("vetId").orEmpty()
-            val vets by vetViewModel.vets.collectAsStateWithLifecycle()
+            val vetsState by vetViewModel.vets.collectAsStateWithLifecycle()
+            val vets = (vetsState as? com.tailtown.pawcare.common.UiState.Success)?.data ?: emptyList()
             val vet = vets.find { it.id == vetId } ?: vets.firstOrNull()
             val vetDetailViewModel: VetDetailViewModel = hiltViewModel()
             val slotState by vetDetailViewModel.slotState.collectAsStateWithLifecycle()
@@ -430,7 +433,8 @@ fun PawcareNavGraph(
             val vetId       = back.arguments?.getString("vetId").orEmpty()
             val bookingDate = back.arguments?.getString("bookingDate").orEmpty()
             val bookingTime = back.arguments?.getString("bookingTime").orEmpty()
-            val vets by vetViewModel.vets.collectAsStateWithLifecycle()
+            val vetsState by vetViewModel.vets.collectAsStateWithLifecycle()
+            val vets = (vetsState as? com.tailtown.pawcare.common.UiState.Success)?.data ?: emptyList()
             val vet = vets.find { it.id == vetId } ?: vets.firstOrNull()
             val petName by petViewModel.petName.collectAsStateWithLifecycle()
             if (vet != null) {
@@ -464,6 +468,10 @@ fun PawcareNavGraph(
         // ── Pet Mall Shopping ──────────────────────────────────────────────
 
         composable(Screen.MallHome.route) {
+            LaunchedEffect(Unit) {
+                shopProductsViewModel.ensureLoaded()
+                promotionViewModel.ensureLoaded()
+            }
             val products by shopProductsViewModel.products.collectAsStateWithLifecycle()
             val promotion by promotionViewModel.promotion.collectAsStateWithLifecycle()
             val petName by petViewModel.petName.collectAsStateWithLifecycle()
@@ -515,6 +523,7 @@ fun PawcareNavGraph(
             arguments = listOf(navArgument("productId") { type = NavType.StringType }),
         ) { back ->
             val productId = back.arguments?.getString("productId").orEmpty()
+            LaunchedEffect(Unit) { shopProductsViewModel.ensureLoaded() }
             val products by shopProductsViewModel.products.collectAsStateWithLifecycle()
             val product = products.find { it.id == productId } ?: products.firstOrNull()
             if (product != null) {
@@ -754,6 +763,7 @@ fun PawcareNavGraph(
         }
 
         composable(Screen.Inbox.route) {
+            LaunchedEffect(Unit) { inboxViewModel.ensureLoaded() }
             val conversations by inboxViewModel.filteredConversations.collectAsStateWithLifecycle()
             val selectedFilter by inboxViewModel.selectedFilter.collectAsStateWithLifecycle()
             InboxScreen(
@@ -780,6 +790,7 @@ fun PawcareNavGraph(
             arguments = listOf(navArgument("conversationId") { type = NavType.StringType }),
         ) { back ->
             val conversationId = back.arguments?.getString("conversationId").orEmpty()
+            LaunchedEffect(Unit) { inboxViewModel.ensureLoaded() }
             val conversations by inboxViewModel.conversations.collectAsStateWithLifecycle()
             val messages by inboxViewModel.messages.collectAsStateWithLifecycle()
             val contactName = conversations.find { it.id == conversationId }?.name ?: ""

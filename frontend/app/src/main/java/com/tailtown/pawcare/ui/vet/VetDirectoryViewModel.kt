@@ -2,6 +2,7 @@ package com.tailtown.pawcare.ui.vet
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tailtown.pawcare.common.UiState
 import com.tailtown.pawcare.data.repository.VetRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,16 +14,19 @@ import javax.inject.Inject
 @HiltViewModel
 class VetDirectoryViewModel @Inject constructor(private val vetRepository: VetRepository) : ViewModel() {
 
-    private val _vets = MutableStateFlow<List<Vet>>(emptyList())
-    val vets: StateFlow<List<Vet>> = _vets.asStateFlow()
+    private val _vets = MutableStateFlow<UiState<List<Vet>>>(UiState.Loading)
+    val vets: StateFlow<UiState<List<Vet>>> = _vets.asStateFlow()
 
     init { loadVets() }
 
-    private fun loadVets() {
+    fun loadVets() {
         viewModelScope.launch {
-            try { _vets.value = vetRepository.getVets() } catch (_: Exception) {}
+            _vets.value = UiState.Loading
+            runCatching { vetRepository.getVets() }
+                .onSuccess { _vets.value = UiState.Success(it) }
+                .onFailure { _vets.value = UiState.Error(it.message ?: "Failed to load vets") }
         }
     }
 
-    fun getVetById(id: String): Vet? = _vets.value.find { it.id == id }
+    fun getVetById(id: String): Vet? = (_vets.value as? UiState.Success)?.data?.find { it.id == id }
 }

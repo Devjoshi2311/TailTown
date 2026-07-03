@@ -29,7 +29,15 @@ class InboxViewModel @Inject constructor(private val inboxRepository: InboxRepos
     private val _messages = MutableStateFlow(sampleMessages)
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
-    init { loadConversations() }
+    private var loaded = false
+
+    // Was eagerly fetched at NavGraph root regardless of whether Inbox was ever opened —
+    // now triggered lazily from the Inbox screen itself (see NavGraph.kt).
+    fun ensureLoaded() {
+        if (loaded) return
+        loaded = true
+        loadConversations()
+    }
 
     private fun loadConversations() {
         viewModelScope.launch {
