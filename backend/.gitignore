@@ -7,6 +7,9 @@ out/
 gradle-app.setting
 !gradle/wrapper/gradle-wrapper.jar
 !gradle/wrapper/gradle-wrapper.properties
+# IntelliJ tends to write a machine-local org.gradle.java.home into this file —
+# breaks any build environment that isn't this exact Mac (e.g. Render's Docker build).
+gradle.properties
 
 # IntelliJ IDEA
 .idea/
