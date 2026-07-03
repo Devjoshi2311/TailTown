@@ -1,0 +1,79 @@
+# Render Blueprint for the TailTown backend.
+#
+# Deploy: push this repo to GitHub, then in the Render dashboard choose
+# New -> Blueprint and select this repo. Render shows a preview of every
+# resource this file creates before anything is provisioned — review it there.
+#
+# Free-tier notes (defaults below use `plan: free` everywhere):
+#  - Free Postgres databases expire after 30 days (Render emails a warning
+#    beforehand). Fine for getting started; switch to `plan: starter` (or
+#    higher) on the database before relying on this for real users.
+#  - Free web services spin down after ~15 min idle and cold-start the next
+#    request (10-30s). Upgrade `plan` on the web service to avoid this.
+#
+# Secrets marked `sync: false` are NOT stored in this file — Render will
+# prompt you to enter them by hand in the dashboard after applying the
+# blueprint (Environment tab on the tailtown-backend service).
+
+databases:
+  - name: tailtown-db
+    plan: free
+    postgresMajorVersion: "16"
+
+services:
+  - type: redis
+    name: tailtown-redis
+    plan: free
+    ipAllowList: [] # internal-only — reachable from other Render services in this account, not the public internet
+
+  - type: web
+    name: tailtown-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: DB_HOST
+        fromDatabase:
+          name: tailtown-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: tailtown-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: tailtown-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: tailtown-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: tailtown-db
+          property: password
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: tailtown-redis
+          property: connectionString
+      # Generate a real RSA keypair for these — do not reuse the ones committed in
+      # application-dev.yml, those are dev-only and already public in git history.
+      - key: JWT_PRIVATE_KEY
+        sync: false
+      - key: JWT_PUBLIC_KEY
+        sync: false
+      # Optional — leave unset to disable Firebase phone-auth verification / push notifications.
+      - key: FIREBASE_CREDENTIALS_JSON
+        sync: false
+      # From Razorpay Dashboard -> Settings -> API Keys (test mode to start).
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false

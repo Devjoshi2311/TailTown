@@ -25,6 +25,9 @@ spring:
     baseline-on-migrate: true
   data:
     redis:
+      # If REDIS_URL is set (e.g. redis://:password@host:port or rediss:// for TLS), it takes precedence
+      # over the discrete host/port/password below — this is native Spring Boot behavior, no code needed.
+      url: ${REDIS_URL:}
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
@@ -53,6 +56,11 @@ jwt:
 firebase:
   credentials-json: ${FIREBASE_CREDENTIALS_JSON:}
 
+razorpay:
+  key-id: ${RAZORPAY_KEY_ID:}
+  key-secret: ${RAZORPAY_KEY_SECRET:}
+  webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
+
 management:
   endpoints:
     web:
@@ -67,7 +75,7 @@ management:
         enabled: true
 
 server:
-  port: 8080
+  port: ${PORT:8080}
   error:
     include-message: never
     include-stacktrace: never
