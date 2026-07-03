@@ -26,7 +26,7 @@ class RemoteShopRepository @Inject constructor(private val api: ApiService) : Sh
         return try {
             val cart = api.getCart().data ?: return CartState()
             itemIdByProductId.clear()
-            cart.items.forEach { itemIdByProductId[it.product.id] = it.id }
+            cart.items.forEach { itemIdByProductId[it.productId] = it.id }
             cart.items.toCartState(cart.subtotal, cart.total)
         } catch (_: Exception) { CartState() }
     }
@@ -41,11 +41,10 @@ class RemoteShopRepository @Inject constructor(private val api: ApiService) : Sh
     override suspend fun updateQty(productId: String, delta: Int): CartState {
         return try {
             val itemId = itemIdByProductId[productId] ?: return getCart()
-            val currentQty = api.getCart().data?.items
-                ?.find { it.product.id == productId }?.quantity ?: 1
-            val newQty = currentQty + delta
+            val currentItem = api.getCart().data?.items?.find { it.productId == productId }
+            val newQty = (currentItem?.quantity ?: 1) + delta
             if (newQty <= 0) api.removeFromCart(itemId)
-            else api.updateCartItem(itemId, UpdateCartItemRequestDto(quantity = newQty))
+            else api.updateCartItem(itemId, UpdateCartItemRequestDto(quantity = newQty, version = currentItem?.version ?: 0))
             getCart()
         } catch (_: Exception) { getCart() }
     }
@@ -105,18 +104,18 @@ class RemoteShopRepository @Inject constructor(private val api: ApiService) : Sh
             items = map { dto ->
                 CartItem(
                     product = ShopProduct(
-                        id = dto.product.id,
-                        name = dto.product.name,
-                        subtitle = dto.product.description.take(40),
+                        id = dto.productId,
+                        name = dto.productName,
+                        subtitle = "",
                         rating = 4.5f,
                         reviewCount = 0,
-                        price = dto.product.price.toInt(),
-                        originalPrice = dto.product.mrp.toInt(),
+                        price = dto.price.toInt(),
+                        originalPrice = dto.price.toInt(),
                         heroTint = Color(0xFFF5F2EC),
                     ),
                     variantLabel = "Standard",
                     qty = dto.quantity,
-                    unitPrice = dto.product.price.toInt(),
+                    unitPrice = dto.price.toInt(),
                 )
             },
             subtotal = subtotal.toInt(),

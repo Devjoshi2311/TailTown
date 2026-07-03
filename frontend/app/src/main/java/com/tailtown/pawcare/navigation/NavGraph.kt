@@ -607,7 +607,16 @@ fun PawcareNavGraph(
                     phone = phone,
                     isPlacingOrder = state is CheckoutUiState.PlacingOrder || state is CheckoutUiState.AwaitingPayment,
                     onBack = { navController.popBackStack() },
-                    onPlaceOrder = { defaultAddress?.let { checkoutViewModel.placeOrder(it.id) } },
+                    onPlaceOrder = {
+                        val address = defaultAddress
+                        if (address != null) {
+                            checkoutViewModel.placeOrder(address.id)
+                        } else {
+                            // Tapping Pay with no saved address used to silently do nothing — send them
+                            // to add one instead of leaving them stuck with no feedback at all.
+                            navController.navigate(Screen.Addresses.route)
+                        }
+                    },
                 )
             }
         }

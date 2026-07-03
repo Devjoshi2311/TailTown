@@ -35,9 +35,13 @@ data class ProductResponseDto(
 @Serializable
 data class CartItemResponseDto(
     val id: String,
-    val product: ProductResponseDto,
+    val productId: String,
+    val productName: String = "",
+    val imageUrl: String? = null,
+    val price: Double = 0.0,
     val quantity: Int,
     val lineTotal: Double,
+    val version: Long = 0,
 )
 
 @Serializable
@@ -52,7 +56,7 @@ data class CartResponseDto(
 data class AddToCartRequestDto(val productId: String, val quantity: Int = 1)
 
 @Serializable
-data class UpdateCartItemRequestDto(val quantity: Int)
+data class UpdateCartItemRequestDto(val quantity: Int, val version: Long)
 
 @Serializable
 data class CreateOrderRequestDto(
