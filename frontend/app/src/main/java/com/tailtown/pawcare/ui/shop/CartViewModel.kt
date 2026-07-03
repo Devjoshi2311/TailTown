@@ -22,6 +22,12 @@ class CartViewModel @Inject constructor(private val shopRepository: ShopReposito
     private val _cartState = MutableStateFlow(CartUiState())
     val cartState: StateFlow<CartUiState> = _cartState.asStateFlow()
 
+    // Items with an update in flight — a second tap on the same item while one is still
+    // pending would race the first and lose to a 409 version conflict, silently dropping
+    // the tap. Guarding here disables that button until the first request settles.
+    private val _updatingIds = MutableStateFlow<Set<String>>(emptySet())
+    val updatingIds: StateFlow<Set<String>> = _updatingIds.asStateFlow()
+
     init { loadCart() }
 
     private fun loadCart() {
@@ -38,17 +44,20 @@ class CartViewModel @Inject constructor(private val shopRepository: ShopReposito
         }
     }
 
-    fun increment(productId: String) {
-        viewModelScope.launch {
-            val state = shopRepository.updateQty(productId, +1)
-            _cartState.value = state.toUiState()
-        }
-    }
+    fun increment(productId: String) = updateQty(productId, +1)
 
-    fun decrement(productId: String) {
+    fun decrement(productId: String) = updateQty(productId, -1)
+
+    private fun updateQty(productId: String, delta: Int) {
+        if (productId in _updatingIds.value) return
+        _updatingIds.update { it + productId }
         viewModelScope.launch {
-            val state = shopRepository.updateQty(productId, -1)
-            _cartState.value = state.toUiState()
+            try {
+                val state = shopRepository.updateQty(productId, delta)
+                _cartState.value = state.toUiState()
+            } finally {
+                _updatingIds.update { it - productId }
+            }
         }
     }
 

@@ -547,11 +547,13 @@ fun PawcareNavGraph(
 
         composable(Screen.Cart.route) {
             val cartState by cartViewModel.cartState.collectAsStateWithLifecycle()
+            val updatingIds by cartViewModel.updatingIds.collectAsStateWithLifecycle()
             CartScreen(
                 items = cartState.items,
                 subtotal = cartState.subtotal,
                 subscriptionSaving = cartState.subscriptionSaving,
                 total = cartState.total,
+                updatingIds = updatingIds,
                 onIncrement = cartViewModel::increment,
                 onDecrement = cartViewModel::decrement,
                 onBack = { navController.popBackStack() },

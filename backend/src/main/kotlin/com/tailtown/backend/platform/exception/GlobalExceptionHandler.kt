@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.security.access.AccessDeniedException
+import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.MissingRequestHeaderException
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -87,6 +88,23 @@ class GlobalExceptionHandler {
             ErrorResponse(
                 code = ErrorCode.FORBIDDEN.name,
                 message = "Access denied",
+                requestId = requestId,
+                timestamp = java.time.Instant.now().toString(),
+                fieldErrors = null
+            )
+        )
+    }
+
+    // Without this, a route/method mismatch (e.g. a client calling PUT on a @PatchMapping-only
+    // route) fell through to the generic 500 handler below with no indication of what was wrong.
+    @ExceptionHandler(HttpRequestMethodNotSupportedException::class)
+    fun handleMethodNotSupported(ex: HttpRequestMethodNotSupportedException): ResponseEntity<ErrorResponse> {
+        val requestId = extractRequestId()
+        log.warn("HttpRequestMethodNotSupportedException requestId={} method={}", requestId, ex.method)
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(
+            ErrorResponse(
+                code = ErrorCode.VALIDATION_ERROR.name,
+                message = "Method '${ex.method}' is not supported for this endpoint",
                 requestId = requestId,
                 timestamp = java.time.Instant.now().toString(),
                 fieldErrors = null

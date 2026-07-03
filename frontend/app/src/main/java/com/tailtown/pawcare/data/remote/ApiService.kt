@@ -119,7 +119,7 @@ interface ApiService {
     @POST("cart/items")
     suspend fun addToCart(@Body body: AddToCartRequestDto): ApiResponseDto<CartResponseDto>
 
-    @PUT("cart/items/{id}")
+    @PATCH("cart/items/{id}")
     suspend fun updateCartItem(
         @Path("id") itemId: String,
         @Body body: UpdateCartItemRequestDto,

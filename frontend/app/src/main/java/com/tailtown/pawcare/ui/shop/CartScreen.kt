@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +58,7 @@ fun CartScreen(
     subtotal: Int = 1667,
     subscriptionSaving: Int = 130,
     total: Int = 1537,
+    updatingIds: Set<String> = emptySet(),
     onIncrement: (String) -> Unit = {},
     onDecrement: (String) -> Unit = {},
     onBack: () -> Unit,
@@ -84,6 +86,7 @@ fun CartScreen(
                 CartItemCard(
                     item = item,
                     qty = item.qty,
+                    enabled = item.product.id !in updatingIds,
                     onIncrement = { onIncrement(item.product.id) },
                     onDecrement = { onDecrement(item.product.id) },
                 )
@@ -221,6 +224,7 @@ private fun CartBottomBar(total: Int, onCheckout: () -> Unit) {
 private fun CartItemCard(
     item: CartItem,
     qty: Int,
+    enabled: Boolean,
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
 ) {
@@ -286,6 +290,7 @@ private fun CartItemCard(
                 Spacer(Modifier.height(6.dp))
                 QtyStepper(
                     qty = qty,
+                    enabled = enabled,
                     onDecrement = onDecrement,
                     onIncrement = onIncrement,
                 )
@@ -297,9 +302,11 @@ private fun CartItemCard(
 @Composable
 private fun QtyStepper(
     qty: Int,
+    enabled: Boolean,
     onDecrement: () -> Unit,
     onIncrement: () -> Unit,
 ) {
+    val contentAlpha = if (enabled) 1f else 0.4f
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -309,7 +316,8 @@ private fun QtyStepper(
                 .size(28.dp)
                 .clip(CircleShape)
                 .background(Bone)
-                .clickable(onClick = onDecrement),
+                .clickable(enabled = enabled, onClick = onDecrement)
+                .alpha(contentAlpha),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -332,7 +340,8 @@ private fun QtyStepper(
                 .size(28.dp)
                 .clip(CircleShape)
                 .background(Bone)
-                .clickable(onClick = onIncrement),
+                .clickable(enabled = enabled, onClick = onIncrement)
+                .alpha(contentAlpha),
             contentAlignment = Alignment.Center,
         ) {
             Text(
