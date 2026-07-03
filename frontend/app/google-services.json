@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "158076749221",
+    "project_id": "tailtown-22c82",
+    "storage_bucket": "tailtown-22c82.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:158076749221:android:8eceb7c3cb0cee3ccbd44c",
+        "android_client_info": {
+          "package_name": "com.tailtown.pawcare"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCztakw-OjbPj1bxtga6xNUeST63iyosnc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

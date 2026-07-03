@@ -1,0 +1,2 @@
+-keep class com.tailtown.pawcare.** { *; }
+-keepattributes *Annotation*

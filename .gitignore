@@ -1,0 +1,24 @@
+*.iml
+.gradle/
+.kotlin/
+local.properties
+.idea/
+.DS_Store
+build/
+/captures
+.externalNativeBuild
+.cxx
+*.jks
+*.keystore
+
+# Expo
+.expo/
+node_modules/
+
+# Firebase service account keys — never commit
+*service-account*.json
+*adminsdk*.json
+*firebase-adminsdk*.json
+
+# Backend sensitive dev config (contains real JWT keys / credentials)
+**/application-dev.yml

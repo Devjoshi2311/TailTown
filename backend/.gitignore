@@ -1,0 +1,55 @@
+# Build output
+build/
+out/
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Eclipse
+.classpath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Spring Boot
+HELP.md
+*.local
+local.properties
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Compiled class files
+*.class
+
+# JAR files (excluding intentional build output)
+*.jar
+!build/libs/*.jar
+
+# Log files
+*.log
+logs/
+
+# Kotlin
+*.kotlin_module
+
+# Test results
+test-results/
