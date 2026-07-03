@@ -2,23 +2,46 @@ package com.tailtown.pawcare.ui.vet
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.razorpay.Checkout
 import com.tailtown.pawcare.data.remote.ApiService
 import com.tailtown.pawcare.data.remote.dto.CreateBookingRequestDto
 import com.tailtown.pawcare.data.remote.dto.CreatePetRequestDto
+import com.tailtown.pawcare.data.remote.dto.VerifyBookingPaymentRequestDto
 import com.tailtown.pawcare.data.repository.VetRepository
+import com.tailtown.pawcare.payment.RazorpayResult
+import com.tailtown.pawcare.payment.RazorpayResultBridge
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
+import java.io.IOException
 import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
+sealed class ReservePaymentUiState {
+    data object Idle : ReservePaymentUiState()
+    data class AwaitingPayment(
+        val bookingId: String,
+        val razorpayOrderId: String,
+        val keyId: String,
+        val amountPaise: Long,
+        val currency: String,
+    ) : ReservePaymentUiState()
+    data object Verifying : ReservePaymentUiState()
+    data class Success(val bookingId: String) : ReservePaymentUiState()
+    data object Pending : ReservePaymentUiState()
+    data class Failed(val reason: String, val cancelled: Boolean) : ReservePaymentUiState()
+}
+
 @HiltViewModel
 class VetDetailViewModel @Inject constructor(
     private val api: ApiService,
     private val vetRepository: VetRepository,
+    private val razorpayResultBridge: RazorpayResultBridge,
 ) : ViewModel() {
 
     data class DateChip(val dayLabel: String, val dayNum: Int, val monthLabel: String)
@@ -39,14 +62,40 @@ class VetDetailViewModel @Inject constructor(
     private val _isSaved = MutableStateFlow(false)
     val isSaved: StateFlow<Boolean> = _isSaved.asStateFlow()
 
+    private val _paymentState = MutableStateFlow<ReservePaymentUiState>(ReservePaymentUiState.Idle)
+    val paymentState: StateFlow<ReservePaymentUiState> = _paymentState.asStateFlow()
+
     private var petId: String? = null
+    private var currentVetId: String? = null
+
+    // Cached so "retry" can reopen Checkout against the same Razorpay order instead of a new booking.
+    private var pendingPayment: ReservePaymentUiState.AwaitingPayment? = null
 
     // slotGrid[dateIdx][timeIdx] = slotId  (exact backend IDs, sorted by time)
     private var slotGrid: List<List<String>> = emptyList()
     // timeLabelGrid[dateIdx][timeIdx] = formatted display string ("10:00 AM")
     private var timeLabelGrid: List<List<String>> = emptyList()
 
+    init {
+        viewModelScope.launch {
+            razorpayResultBridge.results.collect { result ->
+                when (result) {
+                    is RazorpayResult.Success -> {
+                        val myOrderId = pendingPayment?.razorpayOrderId ?: return@collect
+                        if (result.razorpayOrderId != null && result.razorpayOrderId != myOrderId) return@collect
+                        onRazorpaySuccess(result)
+                    }
+                    is RazorpayResult.Failure -> {
+                        if (pendingPayment == null) return@collect
+                        onRazorpayError(result)
+                    }
+                }
+            }
+        }
+    }
+
     fun initialize(vetId: String) {
+        currentVetId = vetId
         viewModelScope.launch {
             loadPet()
             loadSlots(vetId)
@@ -132,7 +181,8 @@ class VetDetailViewModel @Inject constructor(
         viewModelScope.launch { _isSaved.value = vetRepository.toggleSave(vetId) }
     }
 
-    fun reserve(vetId: String, onSuccess: () -> Unit) {
+    /** Creates the booking as PENDING_PAYMENT and, if a gateway order came back, moves to AwaitingPayment. */
+    fun reserve(vetId: String) {
         viewModelScope.launch {
             _slotState.update { it.copy(isBooking = true) }
             try {
@@ -143,29 +193,123 @@ class VetDetailViewModel @Inject constructor(
                 }
                 val state = _slotState.value
                 val slotId = slotGrid.getOrNull(state.selectedDateIdx)?.getOrNull(state.selectedTimeIdx)
-                android.util.Log.d("VetReserve", "booking: pid=$pid slotId=$slotId dateIdx=${state.selectedDateIdx} timeIdx=${state.selectedTimeIdx}")
-                if (pid != null && slotId != null) {
-                    api.createBooking(
-                        CreateBookingRequestDto(
-                            petId = pid,
-                            vetId = vetId,
-                            slotId = slotId,
-                            serviceType = "CONSULTATION",
-                            visitType = "CLINIC",
-                        ),
-                        idempotencyKey = "$pid-$slotId",
-                    )
-                    android.util.Log.d("VetReserve", "SUCCESS")
-                    _slotState.update { it.copy(isBooking = false, bookingSuccess = true) }
-                    onSuccess()
-                } else {
-                    android.util.Log.w("VetReserve", "SKIPPED: pid=$pid slotId=$slotId")
+                if (pid == null || slotId == null) {
                     _slotState.update { it.copy(isBooking = false) }
+                    return@launch
+                }
+                val booking = api.createBooking(
+                    CreateBookingRequestDto(
+                        petId = pid,
+                        vetId = vetId,
+                        slotId = slotId,
+                        serviceType = "CONSULTATION",
+                        visitType = "CLINIC",
+                    ),
+                    idempotencyKey = "$pid-$slotId",
+                ).data
+
+                _slotState.update { it.copy(isBooking = false) }
+
+                val razorpayOrderId = booking?.razorpayOrderId
+                val keyId = booking?.razorpayKeyId
+                val amountPaise = booking?.amountInPaise
+                if (booking != null && booking.status == "PENDING_PAYMENT" && razorpayOrderId != null && keyId != null && amountPaise != null) {
+                    _paymentState.value = ReservePaymentUiState.AwaitingPayment(
+                        bookingId = booking.id,
+                        razorpayOrderId = razorpayOrderId,
+                        keyId = keyId,
+                        amountPaise = amountPaise,
+                        currency = booking.currency,
+                    ).also { pendingPayment = it }
+                } else if (booking != null) {
+                    _paymentState.value = ReservePaymentUiState.Success(booking.id)
+                } else {
+                    _paymentState.value = ReservePaymentUiState.Failed("Couldn't reserve this slot. Please try again.", cancelled = false)
                 }
             } catch (e: Exception) {
-                val body = if (e is retrofit2.HttpException) e.response()?.errorBody()?.string() else null
+                val body = if (e is HttpException) e.response()?.errorBody()?.string() else null
                 android.util.Log.e("VetReserve", "EXCEPTION: ${e.message} body=$body", e)
                 _slotState.update { it.copy(isBooking = false) }
+                _paymentState.value = ReservePaymentUiState.Failed("Couldn't reserve this slot. Please try again.", cancelled = false)
+            }
+        }
+    }
+
+    /** Reopens Checkout on the same booking if one exists, otherwise starts a fresh reservation. */
+    fun retryPayment() {
+        val awaiting = pendingPayment
+        val vetId = currentVetId
+        if (awaiting != null) _paymentState.value = awaiting
+        else if (vetId != null) reserve(vetId)
+    }
+
+    fun dismissPaymentState() {
+        _paymentState.value = ReservePaymentUiState.Idle
+        pendingPayment = null
+    }
+
+    private fun onRazorpaySuccess(result: RazorpayResult.Success) {
+        val bookingId = pendingPayment?.bookingId ?: return
+        val razorpayOrderId = result.razorpayOrderId ?: pendingPayment?.razorpayOrderId ?: return
+        val signature = result.razorpaySignature ?: return
+        viewModelScope.launch {
+            _paymentState.value = ReservePaymentUiState.Verifying
+            try {
+                val booking = api.verifyBookingPayment(
+                    VerifyBookingPaymentRequestDto(
+                        bookingId = bookingId,
+                        razorpayOrderId = razorpayOrderId,
+                        razorpayPaymentId = result.razorpayPaymentId,
+                        razorpaySignature = signature,
+                    )
+                ).data
+                _paymentState.value = if (booking?.status == "CONFIRMED") {
+                    ReservePaymentUiState.Success(bookingId)
+                } else {
+                    ReservePaymentUiState.Pending
+                }
+            } catch (e: HttpException) {
+                // Backend was reached and explicitly declined it — a real failure.
+                _paymentState.value = ReservePaymentUiState.Failed(
+                    reason = "We couldn't verify this payment. If any amount was deducted, it will be refunded.",
+                    cancelled = false,
+                )
+            } catch (e: IOException) {
+                // Couldn't reach the backend — the payment may well have succeeded. Never guess "failed"
+                // here; the webhook/reconciliation job is the source of truth, so wait and poll for it.
+                _paymentState.value = ReservePaymentUiState.Pending
+                pollForResolution(bookingId)
+            }
+        }
+    }
+
+    private fun onRazorpayError(result: RazorpayResult.Failure) {
+        val cancelled = result.code == Checkout.PAYMENT_CANCELED
+        _paymentState.value = ReservePaymentUiState.Failed(
+            reason = if (cancelled) "Payment cancelled." else (result.description ?: "Payment failed."),
+            cancelled = cancelled,
+        )
+    }
+
+    private fun pollForResolution(bookingId: String) {
+        viewModelScope.launch {
+            repeat(6) {
+                delay(3000)
+                try {
+                    val booking = api.getBooking(bookingId).data
+                    when (booking?.status) {
+                        "CONFIRMED" -> {
+                            _paymentState.value = ReservePaymentUiState.Success(bookingId)
+                            return@launch
+                        }
+                        "PAYMENT_FAILED" -> {
+                            _paymentState.value = ReservePaymentUiState.Failed("Payment could not be completed.", cancelled = false)
+                            return@launch
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Transient — keep polling, settle on the Pending copy if the window runs out.
+                }
             }
         }
     }

@@ -62,6 +62,7 @@ import com.tailtown.pawcare.ui.vet.MyBookingsViewModel
 import androidx.compose.runtime.LaunchedEffect
 import com.tailtown.pawcare.ui.vet.VetDetailScreen
 import com.tailtown.pawcare.ui.vet.VetDetailViewModel
+import com.tailtown.pawcare.ui.vet.ReservePaymentUiState
 import com.tailtown.pawcare.ui.vet.VetDirectoryScreen
 import com.tailtown.pawcare.ui.vet.VetDirectoryViewModel
 import com.tailtown.pawcare.ui.home.HomeViewModel
@@ -354,21 +355,67 @@ fun PawcareNavGraph(
             val vet = vets.find { it.id == vetId } ?: vets.firstOrNull()
             val vetDetailViewModel: VetDetailViewModel = hiltViewModel()
             val slotState by vetDetailViewModel.slotState.collectAsStateWithLifecycle()
+            val reserveState by vetDetailViewModel.paymentState.collectAsStateWithLifecycle()
+            val activity = LocalContext.current as Activity
             androidx.compose.runtime.LaunchedEffect(vetId) { vetDetailViewModel.initialize(vetId) }
+
+            val selectedDate = slotState.availableDates.getOrNull(slotState.selectedDateIdx)
+            val dateLabel = selectedDate?.let { "${it.dayNum} ${it.monthLabel}" } ?: ""
+            val timeLabel = slotState.timeSlotsForDate.getOrNull(slotState.selectedTimeIdx) ?: ""
+
+            // Opens Razorpay's own checkout sheet once the booking has been reserved as PENDING_PAYMENT.
+            LaunchedEffect(reserveState) {
+                val awaiting = reserveState as? ReservePaymentUiState.AwaitingPayment ?: return@LaunchedEffect
+                val checkout = Checkout()
+                checkout.setKeyID(awaiting.keyId)
+                val options = JSONObject().apply {
+                    put("name", "TailTown")
+                    put("description", "Vet booking payment")
+                    put("currency", awaiting.currency)
+                    put("order_id", awaiting.razorpayOrderId)
+                    put("amount", awaiting.amountPaise)
+                }
+                checkout.open(activity, options)
+            }
+
+            // Only navigate to the confirmation screen once the backend has confirmed payment.
+            LaunchedEffect(reserveState) {
+                if (reserveState is ReservePaymentUiState.Success) {
+                    myBookingsViewModel.refresh()
+                    navController.navigate(Screen.Booked.createRoute(vetId, dateLabel, timeLabel)) {
+                        popUpTo(Screen.VetDetail.route) { inclusive = true }
+                    }
+                    vetDetailViewModel.dismissPaymentState()
+                }
+            }
+
             if (vet != null) {
-                VetDetailScreen(
-                    vet = vet,
-                    slotState = slotState,
-                    onDateSelected = vetDetailViewModel::selectDate,
-                    onTimeSelected = vetDetailViewModel::selectTime,
-                    onBack = { navController.popBackStack() },
-                    onReserve = { date, time ->
-                        vetDetailViewModel.reserve(vetId) {
-                            myBookingsViewModel.refresh()
-                            navController.navigate(Screen.Booked.createRoute(vetId, date, time))
-                        }
-                    },
-                )
+                when (val state = reserveState) {
+                    is ReservePaymentUiState.Verifying -> PaymentVerifyingOverlay()
+                    is ReservePaymentUiState.Pending -> PaymentPendingScreen(
+                        onGoToOrders = {
+                            navController.navigate(Screen.MyBookings.route) {
+                                popUpTo(Screen.VetDetail.route) { inclusive = true }
+                            }
+                        },
+                        ctaLabel = "Go to my visits",
+                    )
+                    is ReservePaymentUiState.Failed -> PaymentFailedScreen(
+                        reason = state.reason,
+                        cancelled = state.cancelled,
+                        onRetry = vetDetailViewModel::retryPayment,
+                        onContactSupport = { navController.navigate(Screen.HelpSupport.route) },
+                        onBack = { vetDetailViewModel.dismissPaymentState() },
+                    )
+                    else -> VetDetailScreen(
+                        vet = vet,
+                        slotState = slotState,
+                        onDateSelected = vetDetailViewModel::selectDate,
+                        onTimeSelected = vetDetailViewModel::selectTime,
+                        onBack = { navController.popBackStack() },
+                        onReserve = { _, _ -> vetDetailViewModel.reserve(vetId) },
+                    )
+                }
             }
         }
 

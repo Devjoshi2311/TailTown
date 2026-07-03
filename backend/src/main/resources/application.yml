@@ -25,9 +25,10 @@ spring:
     baseline-on-migrate: true
   data:
     redis:
-      # If REDIS_URL is set (e.g. redis://:password@host:port or rediss:// for TLS), it takes precedence
-      # over the discrete host/port/password below — this is native Spring Boot behavior, no code needed.
-      url: ${REDIS_URL:}
+      # A SPRING_DATA_REDIS_URL env var (e.g. redis://:password@host:port, rediss:// for TLS) is picked
+      # up automatically via Spring Boot's relaxed env-var binding and takes precedence over the discrete
+      # host/port/password below. Deliberately no `url:` line here — an empty-string default (${VAR:})
+      # is NOT treated as "unset" by Spring's Redis config and crashes at boot when the var is absent.
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}

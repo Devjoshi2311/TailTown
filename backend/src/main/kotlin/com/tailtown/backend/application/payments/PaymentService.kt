@@ -22,6 +22,7 @@ class PaymentService(
     private val productRepository: ProductRepository,
     private val razorpayGatewayClient: RazorpayGatewayClient,
     private val webhookIdempotencyGuard: WebhookIdempotencyGuard,
+    private val bookingPaymentService: BookingPaymentService,
     private val objectMapper: ObjectMapper
 ) {
     private val log = LoggerFactory.getLogger(PaymentService::class.java)
@@ -98,17 +99,29 @@ class PaymentService(
             return
         }
 
+        // Razorpay's account-wide webhook doesn't distinguish shop orders from vet-booking
+        // payments — try an order first, then fall back to a booking with the same gateway order id.
         val order = orderRepository.findByRazorpayOrderIdAndDeletedAtIsNull(razorpayOrderId)
-        if (order == null) {
-            log.warn("Webhook event {} referenced unknown razorpay order {}", eventId, razorpayOrderId)
+        if (order != null) {
+            when (eventType) {
+                "payment.captured" -> markPaid(order, paymentId)
+                "payment.failed" -> markFailed(order)
+                else -> log.info("Ignoring webhook event type {}", eventType)
+            }
             return
         }
 
-        when (eventType) {
-            "payment.captured" -> markPaid(order, paymentId)
-            "payment.failed" -> markFailed(order)
-            else -> log.info("Ignoring webhook event type {}", eventType)
+        val booking = bookingPaymentService.findByRazorpayOrderId(razorpayOrderId)
+        if (booking != null) {
+            when (eventType) {
+                "payment.captured" -> bookingPaymentService.markPaid(booking, paymentId)
+                "payment.failed" -> bookingPaymentService.markFailed(booking)
+                else -> log.info("Ignoring webhook event type {}", eventType)
+            }
+            return
         }
+
+        log.warn("Webhook event {} referenced unknown razorpay order {}", eventId, razorpayOrderId)
     }
 
     @Transactional
@@ -129,6 +142,8 @@ class PaymentService(
                 log.error("Reconciliation failed for order {}", order.id, e)
             }
         }
+
+        bookingPaymentService.reconcilePending(staleAfter, failAfter)
     }
 
     private fun markPaid(order: OrderEntity, paymentId: String): OrderEntity {

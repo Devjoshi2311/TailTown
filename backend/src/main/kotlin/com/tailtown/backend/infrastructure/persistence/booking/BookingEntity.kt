@@ -4,6 +4,7 @@ import com.tailtown.backend.common.AuditableEntity
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
+import java.math.BigDecimal
 import java.time.Instant
 import java.util.UUID
 
@@ -37,6 +38,18 @@ class BookingEntity(
 
     @Column(name = "status", nullable = false)
     var status: String = "CONFIRMED",
+
+    @Column(name = "amount", nullable = false, precision = 10, scale = 2)
+    var amount: BigDecimal = BigDecimal.ZERO,
+
+    @Column(name = "currency", nullable = false)
+    var currency: String = "INR",
+
+    @Column(name = "razorpay_order_id")
+    var razorpayOrderId: String? = null,
+
+    @Column(name = "razorpay_payment_id")
+    var razorpayPaymentId: String? = null,
 
     @Column(name = "address_id", columnDefinition = "uuid")
     var addressId: UUID? = null,

@@ -56,7 +56,9 @@ services:
         fromDatabase:
           name: tailtown-db
           property: password
-      - key: REDIS_URL
+      # Spring Boot's relaxed env-var binding maps this straight to spring.data.redis.url —
+      # deliberately not a plain REDIS_URL, since the app doesn't reference that name anywhere.
+      - key: SPRING_DATA_REDIS_URL
         fromService:
           type: redis
           name: tailtown-redis

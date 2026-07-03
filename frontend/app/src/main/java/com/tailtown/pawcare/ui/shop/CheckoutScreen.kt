@@ -217,7 +217,7 @@ fun PaymentVerifyingOverlay() {
 }
 
 @Composable
-fun PaymentPendingScreen(onGoToOrders: () -> Unit) {
+fun PaymentPendingScreen(onGoToOrders: () -> Unit, ctaLabel: String = "Go to orders") {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -258,7 +258,7 @@ fun PaymentPendingScreen(onGoToOrders: () -> Unit) {
             colors = ButtonDefaults.buttonColors(containerColor = Ink900, contentColor = White),
         ) {
             Text(
-                text = "Go to orders",
+                text = ctaLabel,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             )
         }

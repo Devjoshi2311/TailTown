@@ -1,6 +1,7 @@
 package com.tailtown.backend.api.v1.booking
 
 import com.tailtown.backend.application.booking.BookingService
+import com.tailtown.backend.application.payments.RazorpayGatewayClient
 import com.tailtown.backend.platform.security.UserPrincipal
 import jakarta.validation.Valid
 import org.springframework.data.domain.PageRequest
@@ -20,7 +21,8 @@ import java.util.UUID
 @RestController
 @RequestMapping("/api/v1/bookings")
 class BookingController(
-    private val bookingService: BookingService
+    private val bookingService: BookingService,
+    private val razorpayGatewayClient: RazorpayGatewayClient
 ) {
 
     @GetMapping
@@ -31,7 +33,7 @@ class BookingController(
     ): ResponseEntity<List<BookingResponse>> {
         val pageable = PageRequest.of(page, size)
         val result = bookingService.listBookings(principal.userId, pageable)
-        return ResponseEntity.ok(result.content.map { BookingResponse.from(it) })
+        return ResponseEntity.ok(result.content.map { BookingResponse.from(it, razorpayGatewayClient.publicKeyId) })
     }
 
     @PostMapping
@@ -49,7 +51,8 @@ class BookingController(
             addressId = request.addressId,
             notes = request.notes
         )
-        return ResponseEntity.status(HttpStatus.CREATED).body(BookingResponse.from(booking))
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(BookingResponse.from(booking, razorpayGatewayClient.publicKeyId))
     }
 
     @GetMapping("/{bookingId}")
@@ -58,7 +61,7 @@ class BookingController(
         @PathVariable bookingId: UUID
     ): ResponseEntity<BookingResponse> {
         val booking = bookingService.getBooking(principal.userId, bookingId)
-        return ResponseEntity.ok(BookingResponse.from(booking))
+        return ResponseEntity.ok(BookingResponse.from(booking, razorpayGatewayClient.publicKeyId))
     }
 
     @PatchMapping("/{bookingId}/cancel")
@@ -73,6 +76,6 @@ class BookingController(
             reason = request.reason!!,
             version = request.version!!
         )
-        return ResponseEntity.ok(BookingResponse.from(booking))
+        return ResponseEntity.ok(BookingResponse.from(booking, razorpayGatewayClient.publicKeyId))
     }
 }

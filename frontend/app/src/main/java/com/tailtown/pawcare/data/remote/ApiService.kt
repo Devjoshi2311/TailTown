@@ -148,6 +148,12 @@ interface ApiService {
     @POST("payments/verify")
     suspend fun verifyPayment(@Body body: VerifyPaymentRequestDto): ApiResponseDto<OrderResponseDto>
 
+    @POST("payments/verify-booking")
+    suspend fun verifyBookingPayment(@Body body: VerifyBookingPaymentRequestDto): ApiResponseDto<BookingResponseDto>
+
+    @GET("bookings/{bookingId}")
+    suspend fun getBooking(@Path("bookingId") bookingId: String): ApiResponseDto<BookingResponseDto>
+
     // ── Subscriptions ─────────────────────────────────────────────────────────
     @GET("subscriptions")
     suspend fun getSubscriptions(): ApiResponseDto<List<SubscriptionResponseDto>>

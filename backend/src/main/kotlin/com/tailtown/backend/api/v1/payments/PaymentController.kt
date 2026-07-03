@@ -1,7 +1,9 @@
 package com.tailtown.backend.api.v1.payments
 
+import com.tailtown.backend.api.v1.booking.BookingResponse
 import com.tailtown.backend.api.v1.orders.OrderResponse
 import com.tailtown.backend.application.orders.OrderService
+import com.tailtown.backend.application.payments.BookingPaymentService
 import com.tailtown.backend.application.payments.PaymentService
 import com.tailtown.backend.application.payments.RazorpayGatewayClient
 import com.tailtown.backend.platform.security.UserPrincipal
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController
 class PaymentController(
     private val paymentService: PaymentService,
     private val orderService: OrderService,
+    private val bookingPaymentService: BookingPaymentService,
     private val razorpayGatewayClient: RazorpayGatewayClient
 ) {
 
@@ -36,6 +39,21 @@ class PaymentController(
         )
         val items = orderService.getOrderItems(order.id)
         return ResponseEntity.ok(OrderResponse.from(order, items, razorpayGatewayClient.publicKeyId))
+    }
+
+    @PostMapping("/verify-booking")
+    fun verifyBooking(
+        @AuthenticationPrincipal principal: UserPrincipal,
+        @Valid @RequestBody request: VerifyBookingPaymentRequest
+    ): ResponseEntity<BookingResponse> {
+        val booking = bookingPaymentService.verifyAndCapture(
+            userId = principal.userId,
+            bookingId = request.bookingId!!,
+            razorpayOrderId = request.razorpayOrderId,
+            razorpayPaymentId = request.razorpayPaymentId,
+            razorpaySignature = request.razorpaySignature
+        )
+        return ResponseEntity.ok(BookingResponse.from(booking, razorpayGatewayClient.publicKeyId))
     }
 
     // No JWT here (see SecurityConfig) — the X-Razorpay-Signature HMAC check is this endpoint's authentication.

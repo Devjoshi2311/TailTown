@@ -17,3 +17,17 @@ data class VerifyPaymentRequest(
     @field:NotBlank(message = "razorpaySignature is required")
     val razorpaySignature: String
 )
+
+data class VerifyBookingPaymentRequest(
+    @field:NotNull(message = "bookingId is required")
+    val bookingId: UUID?,
+
+    @field:NotBlank(message = "razorpayOrderId is required")
+    val razorpayOrderId: String,
+
+    @field:NotBlank(message = "razorpayPaymentId is required")
+    val razorpayPaymentId: String,
+
+    @field:NotBlank(message = "razorpaySignature is required")
+    val razorpaySignature: String
+)
