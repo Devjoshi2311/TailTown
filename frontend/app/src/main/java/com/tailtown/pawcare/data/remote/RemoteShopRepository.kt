@@ -3,11 +3,16 @@ package com.tailtown.pawcare.data.remote
 import androidx.compose.ui.graphics.Color
 import com.tailtown.pawcare.data.remote.dto.AddToCartRequestDto
 import com.tailtown.pawcare.data.remote.dto.CartItemResponseDto
+import com.tailtown.pawcare.data.remote.dto.CreateOrderRequestDto
+import com.tailtown.pawcare.data.remote.dto.OrderResponseDto
 import com.tailtown.pawcare.data.remote.dto.UpdateCartItemRequestDto
+import com.tailtown.pawcare.data.remote.dto.VerifyPaymentRequestDto
 import com.tailtown.pawcare.data.repository.CartState
+import com.tailtown.pawcare.data.repository.OrderResult
 import com.tailtown.pawcare.data.repository.ShopRepository
 import com.tailtown.pawcare.ui.shop.CartItem
 import com.tailtown.pawcare.ui.shop.ShopProduct
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -52,6 +57,48 @@ class RemoteShopRepository @Inject constructor(private val api: ApiService) : Sh
             getCart()
         } catch (_: Exception) { getCart() }
     }
+
+    override suspend fun placeOrder(addressId: String): OrderResult {
+        val response = api.checkout(
+            body = CreateOrderRequestDto(addressId = addressId),
+            idempotencyKey = UUID.randomUUID().toString(),
+        )
+        return response.data!!.toOrderResult()
+    }
+
+    override suspend fun verifyPayment(
+        orderId: String,
+        razorpayOrderId: String,
+        razorpayPaymentId: String,
+        razorpaySignature: String,
+    ): OrderResult {
+        val response = api.verifyPayment(
+            VerifyPaymentRequestDto(
+                orderId = orderId,
+                razorpayOrderId = razorpayOrderId,
+                razorpayPaymentId = razorpayPaymentId,
+                razorpaySignature = razorpaySignature,
+            )
+        )
+        return response.data!!.toOrderResult()
+    }
+
+    override suspend fun getOrder(orderId: String): OrderResult {
+        val response = api.getOrder(orderId)
+        return response.data!!.toOrderResult()
+    }
+
+    private fun OrderResponseDto.toOrderResult() = OrderResult(
+        orderId = id,
+        orderNumber = orderNumber,
+        status = status,
+        paymentStatus = paymentStatus,
+        grandTotal = grandTotal.toInt(),
+        currency = currency,
+        razorpayOrderId = razorpayOrderId,
+        razorpayKeyId = razorpayKeyId,
+        amountInPaise = amountInPaise,
+    )
 
     private fun List<CartItemResponseDto>.toCartState(subtotal: Double, total: Double): CartState =
         CartState(

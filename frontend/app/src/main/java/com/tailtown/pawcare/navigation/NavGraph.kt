@@ -1,9 +1,11 @@
 package com.tailtown.pawcare.navigation
 
+import android.app.Activity
 import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -11,6 +13,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.razorpay.Checkout
 import com.tailtown.pawcare.auth.AuthViewModel
 import com.tailtown.pawcare.ui.health.HealthViewModel
 import com.tailtown.pawcare.ui.home.HomeScreen
@@ -44,8 +47,13 @@ import com.tailtown.pawcare.ui.shop.CartViewModel
 import com.tailtown.pawcare.ui.shop.CategoryScreen
 import com.tailtown.pawcare.ui.shop.CategoryViewModel
 import com.tailtown.pawcare.ui.shop.CheckoutScreen
+import com.tailtown.pawcare.ui.shop.CheckoutUiState
+import com.tailtown.pawcare.ui.shop.CheckoutViewModel
 import com.tailtown.pawcare.ui.shop.MallHomeScreen
 import com.tailtown.pawcare.ui.shop.OrderPlacedScreen
+import com.tailtown.pawcare.ui.shop.PaymentFailedScreen
+import com.tailtown.pawcare.ui.shop.PaymentPendingScreen
+import com.tailtown.pawcare.ui.shop.PaymentVerifyingOverlay
 import com.tailtown.pawcare.ui.shop.ProductDetailScreen
 import com.tailtown.pawcare.ui.shop.ShopProductsViewModel
 import com.tailtown.pawcare.ui.vet.BookedScreen
@@ -59,6 +67,7 @@ import com.tailtown.pawcare.ui.vet.VetDirectoryViewModel
 import com.tailtown.pawcare.ui.home.HomeViewModel
 import com.tailtown.pawcare.ui.home.PetViewModel
 import com.tailtown.pawcare.ui.shop.PromotionViewModel
+import org.json.JSONObject
 
 sealed class Screen(val route: String) {
     // Onboarding & Auth
@@ -95,8 +104,9 @@ sealed class Screen(val route: String) {
     }
     object Cart : Screen("cart")
     object Checkout : Screen("checkout")
-    object OrderPlaced : Screen("order_placed/{orderId}") {
-        fun createRoute(orderId: String) = "order_placed/$orderId"
+    object OrderPlaced : Screen("order_placed/{orderId}?amount={amount}") {
+        fun createRoute(orderId: String, amount: Int? = null) =
+            "order_placed/${Uri.encode(orderId)}?amount=${amount ?: ""}"
     }
 
     // Records & Health
@@ -499,28 +509,74 @@ fun PawcareNavGraph(
             val phone by accountViewModel.phone.collectAsStateWithLifecycle()
             val defaultAddress = addresses.firstOrNull { it.isDefault } ?: addresses.firstOrNull()
             val deliveryAddress = defaultAddress?.let { "${it.street}, ${it.city} ${it.pincode}" } ?: ""
-            CheckoutScreen(
-                total = cartState.total,
-                itemCount = cartState.items.size,
-                deliveryAddress = deliveryAddress,
-                phone = phone,
-                onBack = { navController.popBackStack() },
-                onPlaceOrder = {
-                    navController.navigate(Screen.OrderPlaced.createRoute("VET2406")) {
-                        popUpTo(Screen.Cart.route) { inclusive = true }
-                    }
-                },
-            )
+
+            val checkoutViewModel: CheckoutViewModel = hiltViewModel()
+            val checkoutState by checkoutViewModel.uiState.collectAsStateWithLifecycle()
+            val activity = LocalContext.current as Activity
+
+            // Opens Razorpay's own checkout sheet once an order + gateway order have been created.
+            LaunchedEffect(checkoutState) {
+                val awaiting = checkoutState as? CheckoutUiState.AwaitingPayment ?: return@LaunchedEffect
+                val checkout = Checkout()
+                checkout.setKeyID(awaiting.keyId)
+                val options = JSONObject().apply {
+                    put("name", "TailTown")
+                    put("description", "Order payment")
+                    put("currency", awaiting.currency)
+                    put("order_id", awaiting.razorpayOrderId)
+                    put("amount", awaiting.amountPaise)
+                }
+                checkout.open(activity, options)
+            }
+
+            // Only navigate to the real order-placed screen once the backend has confirmed payment.
+            LaunchedEffect(checkoutState) {
+                val success = checkoutState as? CheckoutUiState.Success ?: return@LaunchedEffect
+                navController.navigate(Screen.OrderPlaced.createRoute(success.orderNumber, success.amount)) {
+                    popUpTo(Screen.Cart.route) { inclusive = true }
+                }
+            }
+
+            when (val state = checkoutState) {
+                is CheckoutUiState.Verifying -> PaymentVerifyingOverlay()
+                is CheckoutUiState.Pending -> PaymentPendingScreen(
+                    onGoToOrders = {
+                        navController.navigate(Screen.OrderHistory.route) {
+                            popUpTo(Screen.Cart.route) { inclusive = true }
+                        }
+                    },
+                )
+                is CheckoutUiState.Failed -> PaymentFailedScreen(
+                    reason = state.reason,
+                    cancelled = state.cancelled,
+                    onRetry = { defaultAddress?.let { checkoutViewModel.retry(it.id) } },
+                    onContactSupport = { navController.navigate(Screen.HelpSupport.route) },
+                    onBack = { navController.popBackStack() },
+                )
+                else -> CheckoutScreen(
+                    total = cartState.total,
+                    itemCount = cartState.items.size,
+                    deliveryAddress = deliveryAddress,
+                    phone = phone,
+                    isPlacingOrder = state is CheckoutUiState.PlacingOrder || state is CheckoutUiState.AwaitingPayment,
+                    onBack = { navController.popBackStack() },
+                    onPlaceOrder = { defaultAddress?.let { checkoutViewModel.placeOrder(it.id) } },
+                )
+            }
         }
 
         composable(
             route = Screen.OrderPlaced.route,
-            arguments = listOf(navArgument("orderId") { type = NavType.StringType }),
+            arguments = listOf(
+                navArgument("orderId") { type = NavType.StringType },
+                navArgument("amount") { type = NavType.StringType; defaultValue = "" },
+            ),
         ) { back ->
             val petName by petViewModel.petName.collectAsStateWithLifecycle()
             OrderPlacedScreen(
                 orderId = back.arguments?.getString("orderId").orEmpty(),
                 petName = petName,
+                amount = back.arguments?.getString("amount")?.toIntOrNull(),
                 onViewOrder = { /* future: order detail */ },
                 onContinueShopping = {
                     navController.navigate(Screen.MallHome.route) {

@@ -36,6 +36,7 @@ class SecurityConfig(
                     // Public endpoints
                     .requestMatchers(
                         "/api/v1/auth/**",
+                        "/api/v1/payments/webhook",
                         "/actuator/health",
                         "/actuator/info",
                         "/api-docs/**",

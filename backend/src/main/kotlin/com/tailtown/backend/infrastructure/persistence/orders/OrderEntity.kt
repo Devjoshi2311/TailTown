@@ -54,6 +54,12 @@ class OrderEntity(
     @Column(name = "payment_status", nullable = false)
     var paymentStatus: String = "PENDING",
 
+    @Column(name = "razorpay_order_id")
+    var razorpayOrderId: String? = null,
+
+    @Column(name = "razorpay_payment_id")
+    var razorpayPaymentId: String? = null,
+
     @Column(name = "placed_at")
     var placedAt: Instant? = null,
 

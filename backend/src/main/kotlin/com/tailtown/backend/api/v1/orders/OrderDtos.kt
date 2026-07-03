@@ -52,10 +52,14 @@ data class OrderResponse(
     val currency: String,
     val deliveryAddressSnapshot: String,
     val placedAt: Instant?,
-    val version: Long
+    val version: Long,
+    // Only populated while paymentStatus == "PENDING" — everything the client needs to open Razorpay Checkout.
+    val razorpayOrderId: String? = null,
+    val razorpayKeyId: String? = null,
+    val amountInPaise: Long? = null
 ) {
     companion object {
-        fun from(entity: OrderEntity, items: List<OrderItemEntity>) = OrderResponse(
+        fun from(entity: OrderEntity, items: List<OrderItemEntity>, razorpayKeyId: String? = null) = OrderResponse(
             id = entity.id,
             orderNumber = entity.orderNumber,
             status = entity.status,
@@ -69,7 +73,10 @@ data class OrderResponse(
             currency = entity.currency,
             deliveryAddressSnapshot = entity.deliveryAddressSnapshot,
             placedAt = entity.placedAt,
-            version = entity.version
+            version = entity.version,
+            razorpayOrderId = entity.razorpayOrderId.takeIf { entity.paymentStatus == "PENDING" },
+            razorpayKeyId = razorpayKeyId.takeIf { entity.paymentStatus == "PENDING" },
+            amountInPaise = entity.grandTotal.movePointRight(2).longValueExact().takeIf { entity.paymentStatus == "PENDING" }
         )
     }
 }

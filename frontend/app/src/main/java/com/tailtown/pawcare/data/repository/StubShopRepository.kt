@@ -34,4 +34,38 @@ class StubShopRepository : ShopRepository {
         items.removeIf { it.product.id == productId }
         return computeState()
     }
+
+    override suspend fun placeOrder(addressId: String): OrderResult {
+        val total = computeState().total
+        return OrderResult(
+            orderId = "stub-order-id",
+            orderNumber = "ORD-STUB001",
+            status = "PENDING_PAYMENT",
+            paymentStatus = "PENDING",
+            grandTotal = total,
+            currency = "INR",
+            razorpayOrderId = "order_stub",
+            razorpayKeyId = "rzp_test_stub",
+            amountInPaise = total * 100L,
+        )
+    }
+
+    override suspend fun verifyPayment(
+        orderId: String,
+        razorpayOrderId: String,
+        razorpayPaymentId: String,
+        razorpaySignature: String,
+    ): OrderResult {
+        val total = computeState().total
+        return OrderResult(
+            orderId = orderId,
+            orderNumber = "ORD-STUB001",
+            status = "PLACED",
+            paymentStatus = "PAID",
+            grandTotal = total,
+            currency = "INR",
+        )
+    }
+
+    override suspend fun getOrder(orderId: String): OrderResult = verifyPayment(orderId, "", "", "")
 }

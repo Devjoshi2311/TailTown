@@ -52,6 +52,9 @@ dependencies {
     // Firebase
     implementation("com.google.firebase:firebase-admin:9.2.0")
 
+    // Razorpay
+    implementation("com.razorpay:razorpay-java:1.4.5")
+
     // Logging
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
 

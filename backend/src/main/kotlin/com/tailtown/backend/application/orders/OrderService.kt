@@ -1,5 +1,6 @@
 package com.tailtown.backend.application.orders
 
+import com.tailtown.backend.application.payments.RazorpayGatewayClient
 import com.tailtown.backend.infrastructure.persistence.cart.CartItemRepository
 import com.tailtown.backend.infrastructure.persistence.cart.CartRepository
 import com.tailtown.backend.infrastructure.persistence.orders.OrderEntity
@@ -30,7 +31,8 @@ class OrderService(
     private val cartRepository: CartRepository,
     private val cartItemRepository: CartItemRepository,
     private val productRepository: ProductRepository,
-    private val addressRepository: AddressRepository
+    private val addressRepository: AddressRepository,
+    private val razorpayGatewayClient: RazorpayGatewayClient
 ) {
 
     companion object {
@@ -89,25 +91,30 @@ class OrderService(
         // Build address snapshot
         val addressSnapshot = buildAddressSnapshot(address)
 
-        // Create order
-        val order = orderRepository.save(
+        // Create order — payment is confirmed only after Razorpay verification/webhook (see PaymentService)
+        var order = orderRepository.save(
             OrderEntity(
                 orderNumber = generateOrderNumber(),
                 userId = userId,
                 cartId = cart.id,
                 addressId = addressId,
                 deliveryAddressSnapshot = addressSnapshot,
-                status = "PLACED",
+                status = "PENDING_PAYMENT",
                 subtotal = subtotal,
                 discountTotal = discountTotal,
                 deliveryFee = deliveryFee,
                 taxTotal = taxTotal,
                 grandTotal = grandTotal,
                 currency = cart.currency,
-                paymentStatus = "PAID",
-                placedAt = Instant.now()
+                paymentStatus = "PENDING"
             )
         )
+
+        // Create the matching Razorpay order using the server-computed grand total — never a client-supplied amount.
+        // If this throws, the whole transaction rolls back (order row, stock decrement, cart conversion).
+        val amountPaise = grandTotal.movePointRight(2).longValueExact()
+        order.razorpayOrderId = razorpayGatewayClient.createOrder(amountPaise, cart.currency, order.orderNumber)
+        order = orderRepository.save(order)
 
         // Create order items
         cartItems.forEach { item ->

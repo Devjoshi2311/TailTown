@@ -1,6 +1,7 @@
 package com.tailtown.backend.api.v1.orders
 
 import com.tailtown.backend.application.orders.OrderService
+import com.tailtown.backend.application.payments.RazorpayGatewayClient
 import com.tailtown.backend.platform.security.UserPrincipal
 import jakarta.validation.Valid
 import org.springframework.data.domain.PageRequest
@@ -21,7 +22,8 @@ import java.util.UUID
 @RestController
 @RequestMapping("/api/v1/orders")
 class OrderController(
-    private val orderService: OrderService
+    private val orderService: OrderService,
+    private val razorpayGatewayClient: RazorpayGatewayClient
 ) {
 
     @PostMapping
@@ -36,7 +38,8 @@ class OrderController(
             idempotencyKey = idempotencyKey
         )
         val items = orderService.getOrderItems(order.id)
-        return ResponseEntity.status(HttpStatus.CREATED).body(OrderResponse.from(order, items))
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(OrderResponse.from(order, items, razorpayGatewayClient.publicKeyId))
     }
 
     @GetMapping
@@ -49,7 +52,7 @@ class OrderController(
         val ordersPage = orderService.listOrders(principal.userId, pageable)
         val orderResponses = ordersPage.content.map { order ->
             val items = orderService.getOrderItems(order.id)
-            OrderResponse.from(order, items)
+            OrderResponse.from(order, items, razorpayGatewayClient.publicKeyId)
         }
         return ResponseEntity.ok(orderResponses)
     }
@@ -61,6 +64,6 @@ class OrderController(
     ): ResponseEntity<OrderResponse> {
         val order = orderService.getOrder(principal.userId, orderId)
         val items = orderService.getOrderItems(order.id)
-        return ResponseEntity.ok(OrderResponse.from(order, items))
+        return ResponseEntity.ok(OrderResponse.from(order, items, razorpayGatewayClient.publicKeyId))
     }
 }

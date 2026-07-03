@@ -9,16 +9,36 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
+import com.razorpay.PaymentData
+import com.razorpay.PaymentResultWithDataListener
 import com.tailtown.pawcare.auth.AuthViewModel
 import com.tailtown.pawcare.navigation.PawcareNavGraph
 import com.tailtown.pawcare.navigation.Screen
+import com.tailtown.pawcare.payment.RazorpayResultBridge
 import com.tailtown.pawcare.ui.theme.PawcareTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
     private val authViewModel: AuthViewModel by viewModels()
+
+    @Inject
+    lateinit var razorpayResultBridge: RazorpayResultBridge
+
+    override fun onPaymentSuccess(razorpayPaymentId: String?, paymentData: PaymentData?) {
+        if (razorpayPaymentId == null) return
+        razorpayResultBridge.emitSuccess(
+            razorpayPaymentId = razorpayPaymentId,
+            razorpayOrderId = paymentData?.orderId,
+            razorpaySignature = paymentData?.signature,
+        )
+    }
+
+    override fun onPaymentError(code: Int, response: String?, paymentData: PaymentData?) {
+        razorpayResultBridge.emitFailure(code, response)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

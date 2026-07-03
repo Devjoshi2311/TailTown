@@ -58,9 +58,9 @@ private fun PaymentMethodResponseDto.toPaymentMethod() = SavedPaymentMethod(
 
 private fun OrderResponseDto.toOrderSummary() = OrderSummary(
     id = id,
-    dateLabel = createdAt?.take(10) ?: "",
+    dateLabel = placedAt?.take(10) ?: "",
     itemsLabel = items.joinToString(", ") { it.productName },
-    total = total.toInt(),
+    total = grandTotal.toInt(),
     status = when (status.uppercase()) {
         "DELIVERED" -> OrderStatus.DELIVERED
         "IN_TRANSIT" -> OrderStatus.IN_TRANSIT

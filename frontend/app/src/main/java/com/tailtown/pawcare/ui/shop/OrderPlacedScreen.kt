@@ -43,6 +43,7 @@ import com.tailtown.pawcare.ui.theme.White
 fun OrderPlacedScreen(
     orderId: String,
     petName: String = "your pet",
+    amount: Int? = null,
     onViewOrder: () -> Unit,
     onContinueShopping: () -> Unit,
 ) {
@@ -88,7 +89,7 @@ fun OrderPlacedScreen(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "Order #$orderId",
+            text = if (amount != null) "Order #$orderId · ₹$amount" else "Order #$orderId",
             style = MaterialTheme.typography.labelSmall,
             color = Ink500,
         )

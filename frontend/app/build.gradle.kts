@@ -101,6 +101,9 @@ dependencies {
     // Image loading
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // Razorpay Checkout
+    implementation("com.razorpay:checkout:1.6.40")
+
     // Hilt
     implementation("com.google.dagger:hilt-android:2.51.1")
     ksp("com.google.dagger:hilt-compiler:2.51.1")

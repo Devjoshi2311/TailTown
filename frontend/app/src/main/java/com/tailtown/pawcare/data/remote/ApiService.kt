@@ -138,8 +138,15 @@ interface ApiService {
     @GET("orders")
     suspend fun getOrders(): ApiResponseDto<List<OrderResponseDto>>
 
+    @GET("orders/{orderId}")
+    suspend fun getOrder(@Path("orderId") orderId: String): ApiResponseDto<OrderResponseDto>
+
     @POST("orders/{orderId}/reorder")
     suspend fun reorder(@Path("orderId") orderId: String): ApiResponseDto<OrderResponseDto>
+
+    // ── Payments ─────────────────────────────────────────────────────────────
+    @POST("payments/verify")
+    suspend fun verifyPayment(@Body body: VerifyPaymentRequestDto): ApiResponseDto<OrderResponseDto>
 
     // ── Subscriptions ─────────────────────────────────────────────────────────
     @GET("subscriptions")
